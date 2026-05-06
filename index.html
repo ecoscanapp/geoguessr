@@ -193,8 +193,8 @@ let currentFullscreenMap = null;
 let animationLine = null;
 let animationInterval = null;
 let usedLocations = [];
+let allPreviousLocations = [];
 
-// Bulgaria boundaries
 const BULGARIA_BOUNDS = { north: 44.21, south: 41.24, east: 28.61, west: 22.36 };
 
 function isInBulgaria(lat, lng) {
@@ -202,29 +202,32 @@ function isInBulgaria(lat, lng) {
          lng <= BULGARIA_BOUNDS.east && lng >= BULGARIA_BOUNDS.west;
 }
 
-// More cities with larger radius for variety
+// Only 5 cities with Yambol included
 const cities = [
   { name: "Sofia", center: { lat: 42.6977, lng: 23.3219 }, radius: 8000 },
-  { name: "Plovdiv", center: { lat: 42.1354, lng: 24.7453 }, radius: 6000 },
-  { name: "Varna", center: { lat: 43.2141, lng: 27.9147 }, radius: 6000 },
-  { name: "Burgas", center: { lat: 42.5048, lng: 27.4626 }, radius: 6000 },
-  { name: "Ruse", center: { lat: 43.8486, lng: 25.9543 }, radius: 5000 },
-  { name: "Stara Zagora", center: { lat: 42.4258, lng: 25.6256 }, radius: 5000 },
-  { name: "Pleven", center: { lat: 43.4170, lng: 24.6067 }, radius: 5000 },
-  { name: "Veliko Tarnovo", center: { lat: 43.0757, lng: 25.6172 }, radius: 4000 },
-  { name: "Blagoevgrad", center: { lat: 42.0209, lng: 23.0943 }, radius: 4000 },
-  { name: "Dobrich", center: { lat: 43.5726, lng: 27.8273 }, radius: 4000 },
-  { name: "Shumen", center: { lat: 43.2714, lng: 26.9228 }, radius: 4000 },
-  { name: "Yambol", center: { lat: 42.484, lng: 26.503 }, radius: 4000 },
-  { name: "Pazardzhik", center: { lat: 42.1887, lng: 24.3319 }, radius: 3500 },
-  { name: "Pernik", center: { lat: 42.6, lng: 23.0333 }, radius: 3500 },
-  { name: "Sliven", center: { lat: 42.6858, lng: 26.3292 }, radius: 3500 },
-  { name: "Haskovo", center: { lat: 41.9344, lng: 25.5554 }, radius: 3500 },
-  { name: "Gabrovo", center: { lat: 42.8742, lng: 25.3344 }, radius: 3000 },
-  { name: "Lovech", center: { lat: 43.1333, lng: 24.7167 }, radius: 3000 },
-  { name: "Kardzhali", center: { lat: 41.65, lng: 25.3667 }, radius: 3000 },
-  { name: "Vratsa", center: { lat: 43.21, lng: 23.5625 }, radius: 3000 }
+  { name: "Plovdiv", center: { lat: 42.1354, lng: 24.7453 }, radius: 7000 },
+  { name: "Varna", center: { lat: 43.2141, lng: 27.9147 }, radius: 7000 },
+  { name: "Burgas", center: { lat: 42.5048, lng: 27.4626 }, radius: 7000 },
+  { name: "Yambol", center: { lat: 42.484, lng: 26.503 }, radius: 6000 }
 ];
+
+let cityRotation = [];
+
+function shuffleArray(arr) {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function getNextCityBatch() {
+  if (cityRotation.length === 0) {
+    cityRotation = shuffleArray([...cities]);
+  }
+  return cityRotation;
+}
 
 function populateCityButtons() {
   const cityGrid = document.getElementById('cityGrid');
@@ -315,7 +318,8 @@ function startTimer() {
 function startGame() {
   document.getElementById("homeScreen").style.display = "none";
   document.getElementById("currentCityName").textContent = selectedCity === 'all' ? 'All Cities' : selectedCity;
-  usedLocations = [];
+  allPreviousLocations = [];
+  cityRotation = [];
   gameActive = true; updateRoundDots(); updateUI(); loadRound();
 }
 
@@ -334,30 +338,45 @@ function updateRoundDots() {
   document.getElementById("roundDots").innerHTML = dots;
 }
 
-function getCityCenter() {
-  if (selectedCity === 'all') {
-    // Pick a random city, avoid repeating recently used ones
-    const available = cities.filter(c => !usedLocations.includes(c.name));
-    const pool = available.length > 0 ? available : cities;
-    return pool[Math.floor(Math.random() * pool.length)];
+function getCityForRound() {
+  if (selectedCity !== 'all') {
+    return cities.find(c => c.name === selectedCity);
   }
-  return cities.find(c => c.name === selectedCity);
+  
+  // Use rotation system to avoid repeats
+  const batch = getNextCityBatch();
+  // Pick a city not used in the last 2 rounds
+  const recentCities = allPreviousLocations.slice(-2);
+  const available = batch.filter(c => !recentCities.includes(c.name));
+  
+  if (available.length === 0) {
+    // If all cities were used recently, pick random
+    cityRotation = shuffleArray([...cities]);
+    const newBatch = getNextCityBatch();
+    return newBatch[Math.floor(Math.random() * newBatch.length)];
+  }
+  
+  return available[Math.floor(Math.random() * available.length)];
 }
 
 function getRandomLocation() {
-  const city = getCityCenter();
+  const city = getCityForRound();
   miniMapCenter = { lat: city.center.lat, lng: city.center.lng };
   
-  // More varied randomization
+  // Much more varied randomization
   const angle = Math.random() * 2 * Math.PI;
-  const radiusFactor = 0.3 + Math.random() * 0.7; // 30% to 100% of max radius
+  // Use skewed distribution to avoid always being same distance from center
+  const radiusFactor = Math.random() < 0.3 ? (0.1 + Math.random() * 0.3) : (0.4 + Math.random() * 0.6);
   const radius = city.radius * radiusFactor;
   const latOffset = (radius / 111320) * Math.cos(angle);
   const lngOffset = (radius / (111320 * Math.cos(city.center.lat * Math.PI / 180))) * Math.sin(angle);
   
+  // Sometimes add extra random offset
+  const extraJitter = Math.random() < 0.5 ? (Math.random() - 0.5) * 0.02 : 0;
+  
   return {
-    lat: city.center.lat + latOffset,
-    lng: city.center.lng + lngOffset,
+    lat: city.center.lat + latOffset + extraJitter,
+    lng: city.center.lng + lngOffset + extraJitter,
     cityName: city.name
   };
 }
@@ -368,37 +387,55 @@ function loadRound() {
   
   const streetViewService = new google.maps.StreetViewService();
   let attempts = 0;
+  const maxAttempts = 40;
   
   function attemptLocation() {
-    if (attempts > 30) {
-      // If too many attempts, expand search
-      const candidate = getRandomLocation();
-      streetViewService.getPanorama({ location: candidate, radius: 100000, source: google.maps.StreetViewSource.DEFAULT }, handleResult);
+    if (attempts >= maxAttempts) {
+      // Final fallback - use city center
+      const fallbackCity = getCityForRound();
+      streetViewService.getPanorama({
+        location: fallbackCity.center,
+        radius: 80000,
+        source: google.maps.StreetViewSource.DEFAULT
+      }, handleResult);
       return;
     }
     attempts++;
     const candidate = getRandomLocation();
-    streetViewService.getPanorama({ location: candidate, radius: 50000, source: google.maps.StreetViewSource.DEFAULT }, handleResult);
+    streetViewService.getPanorama({
+      location: candidate,
+      radius: 60000 + Math.random() * 40000,
+      source: google.maps.StreetViewSource.DEFAULT
+    }, handleResult);
   }
   
   function handleResult(data, status) {
     if (status === "OK" && data.location && data.location.latLng) {
       const loc = data.location.latLng;
-      if (!isInBulgaria(loc.lat(), loc.lng())) { setTimeout(attemptLocation, 30); return; }
+      if (!isInBulgaria(loc.lat(), loc.lng())) { setTimeout(attemptLocation, 20); return; }
       
-      // Check if this location is too close to previously used ones
       const newLoc = { lat: loc.lat(), lng: loc.lng() };
-      const tooClose = actualLocation && calculateDistance(newLoc, actualLocation) < 0.5;
-      if (tooClose && attempts < 20) { setTimeout(attemptLocation, 30); return; }
+      
+      // Check distance from ALL previous locations
+      let tooClose = false;
+      for (const prevLoc of allPreviousLocations) {
+        const dist = calculateDistance(newLoc, prevLoc);
+        if (dist < 1.5) { // At least 1.5km apart
+          tooClose = true;
+          break;
+        }
+      }
+      
+      if (tooClose && attempts < maxAttempts - 5) { 
+        setTimeout(attemptLocation, 20); 
+        return; 
+      }
       
       actualLocation = newLoc;
       actualLocation.cityName = candidate.cityName;
       startLocation = actualLocation;
       
-      // Track used city to avoid repetition
-      if (!usedLocations.includes(candidate.cityName)) {
-        usedLocations.push(candidate.cityName);
-      }
+      allPreviousLocations.push({ lat: actualLocation.lat, lng: actualLocation.lng, city: candidate.cityName });
       
       if (miniMapCenter) miniMap.setCenter(miniMapCenter);
       miniMap.setZoom(12);
@@ -409,12 +446,12 @@ function loadRound() {
       
       setTimeout(() => {
         if (!panorama.getLinks() || panorama.getLinks().length === 0) {
-          setTimeout(attemptLocation, 30); return;
+          setTimeout(attemptLocation, 20); return;
         }
         document.getElementById("loadingSpinner").style.display = "none";
       }, 500);
     } else {
-      setTimeout(attemptLocation, 30);
+      setTimeout(attemptLocation, 20);
     }
   }
   
@@ -423,7 +460,11 @@ function loadRound() {
 
 function resetMiniMap() {
   if (miniMapCenter) miniMap.setCenter(miniMapCenter);
-  else { const city = getCityCenter(); miniMap.setCenter(city.center); miniMapCenter = { lat: city.center.lat, lng: city.center.lng }; }
+  else { 
+    const city = getCityForRound(); 
+    miniMap.setCenter(city.center); 
+    miniMapCenter = { lat: city.center.lat, lng: city.center.lng }; 
+  }
   miniMap.setZoom(12);
   if (guessMarker) guessMarker.setMap(null);
   guessMarker = null; selectedGuess = null;
@@ -448,7 +489,8 @@ function calculateDistance(a, b) {
   const R = 6371;
   const dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
   const sinDLat = Math.sin(dLat/2), sinDLng = Math.sin(dLng/2);
-  return R * 2 * Math.atan2(Math.sqrt(sinDLat*sinDLat + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng), Math.sqrt(1 - sinDLat*sinDLat - Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng));
+  const a1 = sinDLat*sinDLat + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng;
+  return R * 2 * Math.atan2(Math.sqrt(a1), Math.sqrt(1 - a1));
 }
 
 function formatDistance(d) {
