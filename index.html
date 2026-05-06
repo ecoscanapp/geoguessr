@@ -63,13 +63,6 @@
     #startButton { margin-top: 10px; padding: 16px 48px; background: #ff3b3b; border: none; border-radius: 25px; color: white; font-weight: 700; font-size: 18px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 8px 30px rgba(255,59,59,0.3); width: 100%; }
     #startButton:hover { background: #ff4444; transform: translateY(-3px); box-shadow: 0 12px 40px rgba(255,59,59,0.5); }
 
-    #apiKeyScreen { position: absolute; inset: 0; background: rgba(0,0,0,0.95); z-index: 10001; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 20px; }
-    #apiKeyScreen h2 { font-size: 28px; color: #ff3b3b; }
-    #apiKeyScreen p { color: #888; text-align: center; max-width: 500px; font-size: 14px; }
-    #apiKeyInput { padding: 14px 20px; border-radius: 10px; border: 2px solid #333; background: #111; color: white; font-size: 16px; width: 100%; max-width: 450px; font-family: 'Inter', sans-serif; }
-    #apiKeySubmit { padding: 14px 40px; background: #ff3b3b; border: none; border-radius: 10px; color: white; font-weight: 700; font-size: 16px; cursor: pointer; }
-    #apiKeySubmit:hover { background: #ff4444; }
-
     #loadingSpinner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 5001; display: none; }
     .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top: 3px solid #ff3b3b; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -113,14 +106,6 @@
 <body>
 
 <div id="fadeScreen"></div>
-
-<div id="apiKeyScreen">
-  <h2>Google Maps API Key Required</h2>
-  <p>Enter your Google Maps API key to play. Get a free key at console.cloud.google.com (enable Maps JavaScript API and Street View API)</p>
-  <input type="text" id="apiKeyInput" placeholder="Paste your API key here...">
-  <button id="apiKeySubmit" onclick="saveApiKey()">SAVE & START</button>
-  <p style="font-size:12px;color:#666;">Your key is stored locally in your browser only</p>
-</div>
 
 <div id="homeScreen">
   <h1>GEOGUESSR</h1>
@@ -193,29 +178,7 @@
 </div>
 
 <script>
-let API_KEY = localStorage.getItem('geoguessr_api_key') || "";
-
-// Check if we have an API key
-if (!API_KEY) {
-  document.getElementById("apiKeyScreen").style.display = "flex";
-  document.getElementById("homeScreen").style.display = "none";
-} else {
-  document.getElementById("apiKeyScreen").style.display = "none";
-  loadGoogleMaps();
-}
-
-function saveApiKey() {
-  const key = document.getElementById("apiKeyInput").value.trim();
-  if (!key) {
-    alert("Please enter a valid API key");
-    return;
-  }
-  API_KEY = key;
-  localStorage.setItem('geoguessr_api_key', key);
-  document.getElementById("apiKeyScreen").style.display = "none";
-  document.getElementById("homeScreen").style.display = "flex";
-  loadGoogleMaps();
-}
+const API_KEY = localStorage.getItem('API_KEY') || "AIzaSyA7xr0vp6jlIAAkkDMeLjkmDkQ93jTaM4o";
 
 let panorama, miniMap;
 let actualLocation, startLocation, selectedGuess;
@@ -229,8 +192,9 @@ let miniMapCenter = null;
 let currentFullscreenMap = null;
 let animationLine = null;
 let animationInterval = null;
-let allPreviousLocations = [];
+let usedLocations = [];
 
+// Bulgaria boundaries
 const BULGARIA_BOUNDS = { north: 44.21, south: 41.24, east: 28.61, west: 22.36 };
 
 function isInBulgaria(lat, lng) {
@@ -238,31 +202,29 @@ function isInBulgaria(lat, lng) {
          lng <= BULGARIA_BOUNDS.east && lng >= BULGARIA_BOUNDS.west;
 }
 
+// More cities with larger radius for variety
 const cities = [
   { name: "Sofia", center: { lat: 42.6977, lng: 23.3219 }, radius: 8000 },
-  { name: "Plovdiv", center: { lat: 42.1354, lng: 24.7453 }, radius: 7000 },
-  { name: "Varna", center: { lat: 43.2141, lng: 27.9147 }, radius: 7000 },
-  { name: "Burgas", center: { lat: 42.5048, lng: 27.4626 }, radius: 7000 },
-  { name: "Yambol", center: { lat: 42.484, lng: 26.503 }, radius: 6000 }
+  { name: "Plovdiv", center: { lat: 42.1354, lng: 24.7453 }, radius: 6000 },
+  { name: "Varna", center: { lat: 43.2141, lng: 27.9147 }, radius: 6000 },
+  { name: "Burgas", center: { lat: 42.5048, lng: 27.4626 }, radius: 6000 },
+  { name: "Ruse", center: { lat: 43.8486, lng: 25.9543 }, radius: 5000 },
+  { name: "Stara Zagora", center: { lat: 42.4258, lng: 25.6256 }, radius: 5000 },
+  { name: "Pleven", center: { lat: 43.4170, lng: 24.6067 }, radius: 5000 },
+  { name: "Veliko Tarnovo", center: { lat: 43.0757, lng: 25.6172 }, radius: 4000 },
+  { name: "Blagoevgrad", center: { lat: 42.0209, lng: 23.0943 }, radius: 4000 },
+  { name: "Dobrich", center: { lat: 43.5726, lng: 27.8273 }, radius: 4000 },
+  { name: "Shumen", center: { lat: 43.2714, lng: 26.9228 }, radius: 4000 },
+  { name: "Yambol", center: { lat: 42.484, lng: 26.503 }, radius: 4000 },
+  { name: "Pazardzhik", center: { lat: 42.1887, lng: 24.3319 }, radius: 3500 },
+  { name: "Pernik", center: { lat: 42.6, lng: 23.0333 }, radius: 3500 },
+  { name: "Sliven", center: { lat: 42.6858, lng: 26.3292 }, radius: 3500 },
+  { name: "Haskovo", center: { lat: 41.9344, lng: 25.5554 }, radius: 3500 },
+  { name: "Gabrovo", center: { lat: 42.8742, lng: 25.3344 }, radius: 3000 },
+  { name: "Lovech", center: { lat: 43.1333, lng: 24.7167 }, radius: 3000 },
+  { name: "Kardzhali", center: { lat: 41.65, lng: 25.3667 }, radius: 3000 },
+  { name: "Vratsa", center: { lat: 43.21, lng: 23.5625 }, radius: 3000 }
 ];
-
-let cityRotation = [];
-
-function shuffleArray(arr) {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-function getNextCityBatch() {
-  if (cityRotation.length === 0) {
-    cityRotation = shuffleArray([...cities]);
-  }
-  return cityRotation;
-}
 
 function populateCityButtons() {
   const cityGrid = document.getElementById('cityGrid');
@@ -284,99 +246,63 @@ function selectCity(cityName, buttonElement) {
 }
 
 function loadGoogleMaps() {
-  if (!API_KEY) {
-    document.getElementById("apiKeyScreen").style.display = "flex";
-    return;
-  }
-  
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&callback=initMaps&v=weekly`;
-  script.onerror = function() {
-    alert("Failed to load Google Maps. Your API key may be invalid or restricted. Please check your key at console.cloud.google.com");
-    localStorage.removeItem('geoguessr_api_key');
-    location.reload();
-  };
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${API_KEY}&callback=initMaps`;
   document.head.appendChild(script);
 }
 
 function initMaps() {
-  try {
-    panorama = new google.maps.StreetViewPanorama(document.getElementById("street-view"), {
-      gestureHandling: "greedy", 
-      linksControl: true, 
-      panControl: true, 
-      zoomControl: true,
-      addressControl: false, 
-      showRoadLabels: false, 
-      fullscreenControl: false,
-      enableCloseButton: false
+  panorama = new google.maps.StreetViewPanorama(document.getElementById("street-view"), {
+    gestureHandling: "greedy", linksControl: true, panControl: true, zoomControl: true,
+    addressControl: false, showRoadLabels: false, fullscreenControl: false,
+    source: google.maps.StreetViewSource.DEFAULT, enableCloseButton: false
+  });
+
+  miniMap = new google.maps.Map(document.getElementById("miniMap"), {
+    zoom: 12, center: { lat: 42.6977, lng: 23.3219 }, disableDefaultUI: true,
+    backgroundColor: '#ffffff', gestureHandling: 'greedy', zoomControl: false,
+    streetViewControl: false, mapTypeId: 'roadmap', clickableIcons: false
+  });
+
+  panorama.addListener("pov_changed", updateCompass);
+
+  miniMap.addListener("click", (e) => {
+    if (!gameActive) return;
+    if (e.placeId) { e.stop(); return; }
+    selectedGuess = { lat: e.latLng.lat(), lng: e.latLng.lng() };
+    if (guessMarker) guessMarker.setMap(null);
+    guessMarker = new google.maps.Marker({
+      position: selectedGuess, map: miniMap,
+      icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: "#ff3b3b", fillOpacity: 0.9, strokeColor: "#fff", strokeWeight: 2 }
     });
+    const guessBtn = document.getElementById("guessButton");
+    guessBtn.disabled = false; guessBtn.classList.add("active"); guessBtn.innerHTML = 'GUESS LOCATION';
+  });
 
-    miniMap = new google.maps.Map(document.getElementById("miniMap"), {
-      zoom: 12, 
-      center: { lat: 42.6977, lng: 23.3219 }, 
-      disableDefaultUI: true,
-      backgroundColor: '#ffffff', 
-      gestureHandling: 'greedy', 
-      zoomControl: false,
-      streetViewControl: false, 
-      mapTypeId: 'roadmap', 
-      clickableIcons: false
-    });
-
-    panorama.addListener("pov_changed", updateCompass);
-
-    miniMap.addListener("click", (e) => {
-      if (!gameActive) return;
-      if (e.placeId) { e.stop(); return; }
-      selectedGuess = { lat: e.latLng.lat(), lng: e.latLng.lng() };
-      if (guessMarker) guessMarker.setMap(null);
-      guessMarker = new google.maps.Marker({
-        position: selectedGuess, map: miniMap,
-        icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: "#ff3b3b", fillOpacity: 0.9, strokeColor: "#fff", strokeWeight: 2 }
-      });
-      const guessBtn = document.getElementById("guessButton");
-      guessBtn.disabled = false; 
-      guessBtn.classList.add("active"); 
-      guessBtn.innerHTML = 'GUESS LOCATION';
-    });
-
-    panorama.addListener("pano_changed", () => {
-      document.getElementById("loadingSpinner").style.display = "none";
-      setTimeout(() => google.maps.event.trigger(panorama, "resize"), 300);
-    });
-
-    console.log("Google Maps initialized successfully");
-  } catch (e) {
-    console.error("Error initializing maps:", e);
-    alert("Error loading maps. Please check your API key.");
-  }
+  panorama.addListener("pano_changed", () => {
+    document.getElementById("loadingSpinner").style.display = "none";
+    setTimeout(() => google.maps.event.trigger(panorama, "resize"), 300);
+  });
 }
 
 function updateCompass() {
-  if (!panorama) return;
   const heading = panorama.getPov().heading;
   document.getElementById("compassNeedle").style.transform = `rotate(${heading}deg)`;
   document.getElementById("compassHeading").textContent = Math.round(heading) + '\u00B0';
 }
 
 function resetPosition() {
-  if (startLocation && gameActive) { 
-    panorama.setPosition(startLocation); 
-    showNotification("Returned to start"); 
-  }
+  if (startLocation && gameActive) { panorama.setPosition(startLocation); showNotification("Returned to start"); }
 }
 
 function showNotification(message) {
   const notif = document.getElementById("notification");
-  notif.textContent = message; 
-  notif.classList.add("show");
+  notif.textContent = message; notif.classList.add("show");
   setTimeout(() => notif.classList.remove("show"), 1500);
 }
 
 function startTimer() {
-  timer = 0; 
-  clearInterval(timerInterval);
+  timer = 0; clearInterval(timerInterval);
   document.getElementById("timerContainer").classList.remove("warning");
   timerInterval = setInterval(() => {
     timer++;
@@ -387,19 +313,10 @@ function startTimer() {
 }
 
 function startGame() {
-  if (!API_KEY) {
-    document.getElementById("apiKeyScreen").style.display = "flex";
-    return;
-  }
-  
   document.getElementById("homeScreen").style.display = "none";
   document.getElementById("currentCityName").textContent = selectedCity === 'all' ? 'All Cities' : selectedCity;
-  allPreviousLocations = [];
-  cityRotation = [];
-  gameActive = true; 
-  updateRoundDots(); 
-  updateUI(); 
-  loadRound();
+  usedLocations = [];
+  gameActive = true; updateRoundDots(); updateUI(); loadRound();
 }
 
 function updateUI() {
@@ -417,121 +334,87 @@ function updateRoundDots() {
   document.getElementById("roundDots").innerHTML = dots;
 }
 
-function getCityForRound() {
-  if (selectedCity !== 'all') {
-    return cities.find(c => c.name === selectedCity);
+function getCityCenter() {
+  if (selectedCity === 'all') {
+    // Pick a random city, avoid repeating recently used ones
+    const available = cities.filter(c => !usedLocations.includes(c.name));
+    const pool = available.length > 0 ? available : cities;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
-  
-  const batch = getNextCityBatch();
-  const recentCities = allPreviousLocations.slice(-2).map(l => l.city);
-  const available = batch.filter(c => !recentCities.includes(c.name));
-  
-  if (available.length === 0) {
-    cityRotation = shuffleArray([...cities]);
-    const newBatch = getNextCityBatch();
-    return newBatch[Math.floor(Math.random() * newBatch.length)];
-  }
-  
-  return available[Math.floor(Math.random() * available.length)];
+  return cities.find(c => c.name === selectedCity);
 }
 
 function getRandomLocation() {
-  const city = getCityForRound();
+  const city = getCityCenter();
   miniMapCenter = { lat: city.center.lat, lng: city.center.lng };
   
+  // More varied randomization
   const angle = Math.random() * 2 * Math.PI;
-  const radiusFactor = Math.random() < 0.3 ? (0.1 + Math.random() * 0.3) : (0.4 + Math.random() * 0.6);
+  const radiusFactor = 0.3 + Math.random() * 0.7; // 30% to 100% of max radius
   const radius = city.radius * radiusFactor;
   const latOffset = (radius / 111320) * Math.cos(angle);
   const lngOffset = (radius / (111320 * Math.cos(city.center.lat * Math.PI / 180))) * Math.sin(angle);
-  const extraJitter = Math.random() < 0.5 ? (Math.random() - 0.5) * 0.02 : 0;
   
   return {
-    lat: city.center.lat + latOffset + extraJitter,
-    lng: city.center.lng + lngOffset + extraJitter,
+    lat: city.center.lat + latOffset,
+    lng: city.center.lng + lngOffset,
     cityName: city.name
   };
 }
 
 function loadRound() {
-  if (!panorama) {
-    showNotification("Maps not loaded yet. Please wait...");
-    setTimeout(loadRound, 1000);
-    return;
-  }
-  
   document.getElementById("loadingSpinner").style.display = "block";
-  startTimer(); 
-  resetMiniMap(); 
-  gameActive = true;
+  startTimer(); resetMiniMap(); gameActive = true;
   
   const streetViewService = new google.maps.StreetViewService();
   let attempts = 0;
-  const maxAttempts = 40;
   
   function attemptLocation() {
-    if (attempts >= maxAttempts) {
-      const fallbackCity = getCityForRound();
-      streetViewService.getPanorama({
-        location: fallbackCity.center,
-        radius: 80000
-      }, handleResult);
+    if (attempts > 30) {
+      // If too many attempts, expand search
+      const candidate = getRandomLocation();
+      streetViewService.getPanorama({ location: candidate, radius: 100000, source: google.maps.StreetViewSource.DEFAULT }, handleResult);
       return;
     }
     attempts++;
     const candidate = getRandomLocation();
-    streetViewService.getPanorama({
-      location: candidate,
-      radius: 60000 + Math.random() * 40000
-    }, handleResult);
+    streetViewService.getPanorama({ location: candidate, radius: 50000, source: google.maps.StreetViewSource.DEFAULT }, handleResult);
   }
   
   function handleResult(data, status) {
     if (status === "OK" && data.location && data.location.latLng) {
       const loc = data.location.latLng;
-      if (!isInBulgaria(loc.lat(), loc.lng())) { 
-        setTimeout(attemptLocation, 20); 
-        return; 
-      }
+      if (!isInBulgaria(loc.lat(), loc.lng())) { setTimeout(attemptLocation, 30); return; }
       
+      // Check if this location is too close to previously used ones
       const newLoc = { lat: loc.lat(), lng: loc.lng() };
-      
-      let tooClose = false;
-      for (const prevLoc of allPreviousLocations) {
-        const dist = calculateDistance(newLoc, prevLoc);
-        if (dist < 1.5) {
-          tooClose = true;
-          break;
-        }
-      }
-      
-      if (tooClose && attempts < maxAttempts - 5) { 
-        setTimeout(attemptLocation, 20); 
-        return; 
-      }
+      const tooClose = actualLocation && calculateDistance(newLoc, actualLocation) < 0.5;
+      if (tooClose && attempts < 20) { setTimeout(attemptLocation, 30); return; }
       
       actualLocation = newLoc;
       actualLocation.cityName = candidate.cityName;
       startLocation = actualLocation;
       
-      allPreviousLocations.push({ lat: actualLocation.lat, lng: actualLocation.lng, city: candidate.cityName });
+      // Track used city to avoid repetition
+      if (!usedLocations.includes(candidate.cityName)) {
+        usedLocations.push(candidate.cityName);
+      }
       
       if (miniMapCenter) miniMap.setCenter(miniMapCenter);
       miniMap.setZoom(12);
       document.getElementById("currentCityName").textContent = candidate.cityName;
       
+      panorama.setOptions({ source: google.maps.StreetViewSource.DEFAULT });
       panorama.setPosition(actualLocation);
       
       setTimeout(() => {
-        const links = panorama.getLinks();
-        if (!links || links.length === 0) {
-          setTimeout(attemptLocation, 20); 
-          return;
+        if (!panorama.getLinks() || panorama.getLinks().length === 0) {
+          setTimeout(attemptLocation, 30); return;
         }
         document.getElementById("loadingSpinner").style.display = "none";
       }, 500);
     } else {
-      setTimeout(attemptLocation, 20);
+      setTimeout(attemptLocation, 30);
     }
   }
   
@@ -540,43 +423,24 @@ function loadRound() {
 
 function resetMiniMap() {
   if (miniMapCenter) miniMap.setCenter(miniMapCenter);
-  else { 
-    const city = getCityForRound(); 
-    miniMap.setCenter(city.center); 
-    miniMapCenter = { lat: city.center.lat, lng: city.center.lng }; 
-  }
+  else { const city = getCityCenter(); miniMap.setCenter(city.center); miniMapCenter = { lat: city.center.lat, lng: city.center.lng }; }
   miniMap.setZoom(12);
   if (guessMarker) guessMarker.setMap(null);
-  guessMarker = null; 
-  selectedGuess = null;
+  guessMarker = null; selectedGuess = null;
   const guessBtn = document.getElementById("guessButton");
-  guessBtn.disabled = true; 
-  guessBtn.classList.remove("active"); 
-  guessBtn.innerHTML = 'PLACE PIN TO GUESS';
+  guessBtn.disabled = true; guessBtn.classList.remove("active"); guessBtn.innerHTML = 'PLACE PIN TO GUESS';
 }
 
 function submitGuess() {
   if (!selectedGuess || !gameActive) return;
-  gameActive = false; 
-  clearInterval(timerInterval);
+  gameActive = false; clearInterval(timerInterval);
   const timeTaken = timer;
   const distance = calculateDistance(selectedGuess, actualLocation);
   let points;
   if (distance < 0.01) points = 5000;
-  else { 
-    points = Math.round(5000 * Math.exp(-(distance - 0.01) / 2)); 
-    points = Math.max(0, points); 
-  }
+  else { points = Math.round(5000 * Math.exp(-(distance - 0.01) / 2)); points = Math.max(0, points); }
   totalScore += points;
-  roundHistory.push({ 
-    round, 
-    city: actualLocation.cityName || selectedCity, 
-    guess: selectedGuess, 
-    actual: actualLocation, 
-    distance, 
-    points, 
-    time: timeTaken 
-  });
+  roundHistory.push({ round, city: actualLocation.cityName || selectedCity, guess: selectedGuess, actual: actualLocation, distance, points, time: timeTaken });
   showRoundResult(distance, points, timeTaken);
 }
 
@@ -584,8 +448,7 @@ function calculateDistance(a, b) {
   const R = 6371;
   const dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
   const sinDLat = Math.sin(dLat/2), sinDLng = Math.sin(dLng/2);
-  const a1 = sinDLat*sinDLat + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng;
-  return R * 2 * Math.atan2(Math.sqrt(a1), Math.sqrt(1 - a1));
+  return R * 2 * Math.atan2(Math.sqrt(sinDLat*sinDLat + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng), Math.sqrt(1 - sinDLat*sinDLat - Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*sinDLng*sinDLng));
 }
 
 function formatDistance(d) {
@@ -594,10 +457,7 @@ function formatDistance(d) {
   return d.toFixed(2) + " km";
 }
 
-function formatTime(s) { 
-  const m = Math.floor(s/60); 
-  return m + ":" + (s%60).toString().padStart(2,'0'); 
-}
+function formatTime(s) { const m = Math.floor(s/60); return m + ":" + (s%60).toString().padStart(2,'0'); }
 
 function showRoundResult(distance, points, timeTaken) {
   document.getElementById("roundResultOverlay").style.display = "block";
@@ -608,56 +468,22 @@ function showRoundResult(distance, points, timeTaken) {
   
   const nextBtn = document.getElementById("overlayNextBtn");
   const finalBtn = document.getElementById("overlayFinalBtn");
-  if (round >= 5) { 
-    nextBtn.style.display = "none"; 
-    finalBtn.style.display = "block"; 
-  } else { 
-    nextBtn.style.display = "block"; 
-    finalBtn.style.display = "none"; 
-  }
+  if (round >= 5) { nextBtn.style.display = "none"; finalBtn.style.display = "block"; }
+  else { nextBtn.style.display = "block"; finalBtn.style.display = "none"; }
   
   if (currentFullscreenMap) currentFullscreenMap = null;
   currentFullscreenMap = new google.maps.Map(document.getElementById("fullscreenResultMap"), {
-    disableDefaultUI: true, 
-    zoomControl: false, 
-    mapTypeControl: false, 
-    streetViewControl: false,
-    clickableIcons: false, 
-    backgroundColor: '#ffffff', 
-    mapTypeId: 'roadmap'
+    disableDefaultUI: true, zoomControl: false, mapTypeControl: false, streetViewControl: false,
+    clickableIcons: false, backgroundColor: '#ffffff', mapTypeId: 'roadmap'
   });
   
-  new google.maps.Marker({ 
-    position: selectedGuess, 
-    map: currentFullscreenMap,
-    icon: { 
-      path: google.maps.SymbolPath.CIRCLE, 
-      scale: 15, 
-      fillColor: "#ff3b3b", 
-      fillOpacity: 1, 
-      strokeColor: "#fff", 
-      strokeWeight: 3 
-    }, 
-    zIndex: 1000 
-  });
-  
-  new google.maps.Marker({ 
-    position: actualLocation, 
-    map: currentFullscreenMap,
-    icon: { 
-      path: google.maps.SymbolPath.CIRCLE, 
-      scale: 15, 
-      fillColor: "#4ade80", 
-      fillOpacity: 1, 
-      strokeColor: "#fff", 
-      strokeWeight: 3 
-    }, 
-    zIndex: 1000 
-  });
+  new google.maps.Marker({ position: selectedGuess, map: currentFullscreenMap,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 15, fillColor: "#ff3b3b", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 }, zIndex: 1000 });
+  new google.maps.Marker({ position: actualLocation, map: currentFullscreenMap,
+    icon: { path: google.maps.SymbolPath.CIRCLE, scale: 15, fillColor: "#4ade80", fillOpacity: 1, strokeColor: "#fff", strokeWeight: 3 }, zIndex: 1000 });
   
   const bounds = new google.maps.LatLngBounds();
-  bounds.extend(selectedGuess); 
-  bounds.extend(actualLocation);
+  bounds.extend(selectedGuess); bounds.extend(actualLocation);
   currentFullscreenMap.fitBounds(bounds, 80);
   setTimeout(() => animateLine(currentFullscreenMap, selectedGuess, actualLocation), 500);
 }
@@ -666,28 +492,13 @@ function animateLine(map, from, to) {
   if (animationLine) animationLine.setMap(null);
   if (animationInterval) clearInterval(animationInterval);
   let progress = 0;
-  animationLine = new google.maps.Polyline({ 
-    path: [from, from], 
-    map,
-    strokeColor: "#ff3b3b", 
-    strokeWeight: 4, 
-    strokeOpacity: 0.8,
-    icons: [{ 
-      icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, 
-      offset: "100%" 
-    }] 
-  });
+  animationLine = new google.maps.Polyline({ path: [from, from], map,
+    strokeColor: "#ff3b3b", strokeWeight: 4, strokeOpacity: 0.8,
+    icons: [{ icon: { path: google.maps.SymbolPath.FORWARD_CLOSED_ARROW }, offset: "100%" }] });
   animationInterval = setInterval(() => {
     progress += 0.02;
-    if (progress >= 1) { 
-      clearInterval(animationInterval); 
-      animationLine.setPath([from, to]); 
-    } else { 
-      animationLine.setPath([from, { 
-        lat: from.lat + (to.lat-from.lat)*progress, 
-        lng: from.lng + (to.lng-from.lng)*progress 
-      }]); 
-    }
+    if (progress >= 1) { clearInterval(animationInterval); animationLine.setPath([from, to]); }
+    else { animationLine.setPath([from, { lat: from.lat + (to.lat-from.lat)*progress, lng: from.lng + (to.lng-from.lng)*progress }]); }
   }, 20);
 }
 
@@ -699,14 +510,8 @@ function nextRound() {
     document.getElementById("roundResultOverlay").style.display = "none";
     if (currentFullscreenMap) currentFullscreenMap = null;
     round++;
-    if (round > 5) { 
-      showFinalResults(); 
-      document.getElementById("fadeScreen").style.display = "none"; 
-      return; 
-    }
-    updateUI(); 
-    updateRoundDots(); 
-    loadRound();
+    if (round > 5) { showFinalResults(); document.getElementById("fadeScreen").style.display = "none"; return; }
+    updateUI(); updateRoundDots(); loadRound();
     setTimeout(() => { document.getElementById("fadeScreen").style.display = "none"; }, 400);
   }, 400);
 }
@@ -721,19 +526,15 @@ function showFinalResults() {
   document.getElementById("summaryBestRound").textContent = (roundHistory.length ? Math.max(...roundHistory.map(r=>r.points)) : 0) + " pts";
   
   document.getElementById("finalHistoryBody").innerHTML = roundHistory.map(r => `
-    <tr>
-      <td><span style="font-weight:700;color:#ff3b3b;">Round ${r.round}</span></td>
-      <td>${r.city}</td>
-      <td style="color:#ff3b3b;font-weight:700;">${formatDistance(r.distance)}</td>
-      <td style="color:#4ade80;font-weight:700;">+${r.points}</td>
-      <td>${formatTime(r.time)}</td>
-    </tr>
+    <tr><td><span style="font-weight:700;color:#ff3b3b;">Round ${r.round}</span></td>
+    <td>${r.city}</td><td style="color:#ff3b3b;font-weight:700;">${formatDistance(r.distance)}</td>
+    <td style="color:#4ade80;font-weight:700;">+${r.points}</td><td>${formatTime(r.time)}</td></tr>
   `).join('');
   document.getElementById("finalScreen").scrollTop = 0;
 }
 
-// Initialize
 populateCityButtons();
+loadGoogleMaps();
 </script>
 </body>
 </html>
